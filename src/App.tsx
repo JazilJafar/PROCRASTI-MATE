@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { awardAchievements } from './lib/achievements';
 import { chooseRoast } from './lib/roasts';
 import { speakRoast } from './lib/speech';
+import { playFocusChime } from './lib/sound';
 import { elapsedSeconds, formatTime } from './lib/timer';
 import { defaults, loadData, saveData } from './lib/storage';
 import type { AppData, EventType, Intensity, Priority, Session, Task } from './types';
@@ -25,6 +26,7 @@ export default function App() {
   const [showOnboard, setShowOnboard] = useState(() => !localStorage.getItem('procrasti-mate-seen'));
   const [chaos, setChaos] = useState(false);
   const lastRoast = useRef(0);
+  const lastSoundCue = useRef(0);
   const stream = useRef<MediaStream | null>(null);
   const [cameraState, setCameraState] = useState<'off'|'loading'|'on'|'error'>('off');
   const running = startedAt !== null && pausedAt === null;
@@ -32,9 +34,18 @@ export default function App() {
   const elapsed = startedAt ? Math.min(duration, Math.max(0, elapsedSeconds(startedAt, now) - pausedTotal)) : 0;
   const remaining = Math.max(0, duration - elapsed);
   const active = data.tasks.find(t => t.id === activeTask);
+  const soundCount = duration <= 10 * 60 ? 3 : duration <= 25 * 60 ? 5 : 10;
 
   useEffect(() => { saveData(data); }, [data]);
   useEffect(() => { if (!running) return; const id = window.setInterval(() => setNow(Date.now()), 250); return () => clearInterval(id); }, [running]);
+  useEffect(() => {
+    if (!running || !data.settings.sounds || duration <= 0) return;
+    const cue = Math.min(soundCount, Math.floor((elapsed / duration) * (soundCount + 1)));
+    if (cue > lastSoundCue.current) {
+      lastSoundCue.current = cue;
+      playFocusChime(cue);
+    }
+  }, [data.settings.sounds, duration, elapsed, running, soundCount]);
   const event = useCallback((type: EventType) => {
     if (!startedAt || pausedAt !== null) return;
     setDistractions(v => v + 1);
@@ -52,9 +63,9 @@ export default function App() {
   useEffect(() => { if (startedAt && remaining === 0) finish(true); }, [remaining, startedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { stream.current?.getTracks().forEach(t => t.stop()); }, []);
 
-  function start() { if (startedAt && pausedAt) { setPausedTotal(v => v + Date.now() - pausedAt); setPausedAt(null); } else if (!startedAt) { setStartedAt(Date.now()); setPausedTotal(0); setDistractions(0); setRoast(''); } }
+  function start() { if (startedAt && pausedAt) { setPausedTotal(v => v + Date.now() - pausedAt); setPausedAt(null); } else if (!startedAt) { setStartedAt(Date.now()); setPausedTotal(0); setDistractions(0); setRoast(''); lastSoundCue.current = 0; } }
   function pause() { if (startedAt && !pausedAt) setPausedAt(Date.now()); }
-  function reset() { setStartedAt(null); setPausedAt(null); setPausedTotal(0); setDistractions(0); setRoast(''); }
+  function reset() { setStartedAt(null); setPausedAt(null); setPausedTotal(0); setDistractions(0); setRoast(''); lastSoundCue.current = 0; }
   function finish(completed: boolean) {
     if (!startedAt) return;
     const session: Session = { id: uid(), startedAt, endedAt: Date.now(), duration: elapsed, taskId: activeTask, distractions, completed };
@@ -62,7 +73,7 @@ export default function App() {
     setData(d => ({ ...d, sessions, achievements: awardAchievements(sessions, d.tasks, d.achievements) }));
     reset();
   }
-  function updateSettings(patch: Partial<AppData['settings']>) { setData(d => ({ ...d, settings: { ...d.settings, ...patch } })); }
+  function updateSettings(patch: Partial<AppData['settings']>) { setData(d => ({ ...d, settings: { ...d.settings, ...patch, ...(Object.prototype.hasOwnProperty.call(patch, 'sounds') ? { soundPreferenceConfigured: true } : {}) } })); }
   async function toggleCamera() {
     if (stream.current) { stream.current.getTracks().forEach(t => t.stop()); stream.current = null; setCameraState('off'); return; }
     setCameraState('loading');
@@ -94,7 +105,7 @@ function Analytics({ sessions, weekly, achievements }: { sessions: Session[]; we
   return <section><div className="text-lime text-xs tracking-[.25em] uppercase mb-3">Evidence, not vibes</div><h1 className="font-display text-5xl font-bold mb-10">Analytics<span className="text-lime">.</span></h1><div className="grid lg:grid-cols-[1.5fr_1fr] gap-5"><div className="border border-white/15 bg-[#141414] p-5"><h2 className="font-display text-xl mb-6">Focus minutes / last 7 days</h2>{sessions.length ? <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={weekly}><CartesianGrid stroke="#ffffff12" vertical={false}/><XAxis dataKey="day" stroke="#9b9b95" tickLine={false} axisLine={false}/><YAxis stroke="#9b9b95" tickLine={false} axisLine={false}/><Tooltip contentStyle={{ background: '#1e1e1e', border: '1px solid #ffffff33' }}/><Bar dataKey="minutes" fill="#c6ff4a" /></BarChart></ResponsiveContainer></div> : <div className="h-64 grid place-items-center text-muted text-sm text-center">Complete a focus session to make<br/>this chart honest.</div>}</div><div className="border border-white/15 p-5"><h2 className="font-display text-xl mb-6">Achievements</h2>{achievements.length ? achievements.map(a => <div key={a.id} className="flex gap-3 border-t border-white/10 py-4"><Trophy className="text-lime shrink-0" size={20}/><div><div className="font-medium">{a.title}</div><div className="text-xs text-muted">{a.description}</div></div></div>) : <div className="text-muted text-sm">Your trophy shelf is empty. A session seems like a good start.</div>}</div></div><div className="mt-8 text-xs text-muted">{sessions.length} recorded session{sessions.length === 1 ? '' : 's'} · Stored only on this device · Not scientific proof of productivity.</div></section>;
 }
 function Settings({ settings, cameraState, onSetting, onCamera }: { settings: AppData['settings']; cameraState: string; onSetting: (p: Partial<AppData['settings']>) => void; onCamera: () => void }) {
-  return <section className="max-w-3xl"><div className="text-lime text-xs tracking-[.25em] uppercase mb-3">Preferences</div><h1 className="font-display text-5xl font-bold mb-10">Settings<span className="text-lime">.</span></h1><div className="border border-white/15 divide-y divide-white/10"><Setting label="Roast intensity" hint="How much truth can you handle?"><select value={settings.intensity} onChange={e => onSetting({ intensity: e.target.value as Intensity })} className="bg-ink border border-white/20 p-2"><option value="mild">Mild</option><option value="savage">Savage</option><option value="unhinged">Unhinged</option></select></Setting><Setting label="Default focus duration" hint="Adjust the protocol"><input aria-label="Default focus duration" type="number" min="1" max="120" value={settings.duration} onChange={e => onSetting({ duration: Number(e.target.value) || 25 })} className="bg-ink border border-white/20 p-2 w-20"/> <span className="text-muted text-sm">minutes</span></Setting><Setting label="Spoken roasts" hint={'speechSynthesis' in window ? 'Conversational browser voice; no account required' : 'Not supported in this browser'}><Toggle checked={settings.speech} onChange={() => onSetting({ speech: !settings.speech })} icon={settings.speech ? <Volume2 size={16}/> : <VolumeX size={16}/>} /></Setting><Setting label="Chaos Mode" hint="Reversible visual interruptions"><Toggle checked={settings.chaos} onChange={() => onSetting({ chaos: !settings.chaos })} /></Setting><Setting label="Optional webcam monitoring" hint="Permission is requested only when you press enable. No frames are saved or uploaded."><button onClick={onCamera} className={`px-3 py-2 text-sm ${cameraState === 'on' ? 'bg-lime text-ink' : 'border border-white/20'}`}><Camera size={15} className="inline mr-2"/>{cameraState === 'loading' ? 'Requesting…' : cameraState === 'on' ? 'Stop camera' : 'Enable camera'}</button>{cameraState === 'error' && <div className="text-coral text-xs mt-2">Camera unavailable or permission denied. Focus still works normally.</div>}</Setting></div><div className="mt-8 border-l-2 border-lime pl-4 text-sm text-muted">Privacy baseline: tasks, preferences, sessions, and achievements never leave this browser. Camera monitoring is opt-in and stops when disabled.</div></section>;
+  return <section className="max-w-3xl"><div className="text-lime text-xs tracking-[.25em] uppercase mb-3">Preferences</div><h1 className="font-display text-5xl font-bold mb-10">Settings<span className="text-lime">.</span></h1><div className="border border-white/15 divide-y divide-white/10"><Setting label="Roast intensity" hint="How much truth can you handle?"><select value={settings.intensity} onChange={e => onSetting({ intensity: e.target.value as Intensity })} className="bg-ink border border-white/20 p-2"><option value="mild">Mild</option><option value="savage">Savage</option><option value="unhinged">Unhinged</option></select></Setting><Setting label="Default focus duration" hint="Adjust the protocol"><input aria-label="Default focus duration" type="number" min="1" max="120" value={settings.duration} onChange={e => onSetting({ duration: Number(e.target.value) || 25 })} className="bg-ink border border-white/20 p-2 w-20"/> <span className="text-muted text-sm">minutes</span></Setting><Setting label="Spoken roasts" hint={'speechSynthesis' in window ? 'Conversational browser voice; no account required' : 'Not supported in this browser'}><Toggle checked={settings.speech} onChange={() => onSetting({ speech: !settings.speech })} icon={settings.speech ? <Volume2 size={16}/> : <VolumeX size={16}/>} /></Setting><Setting label="Focus chimes" hint="Short local cues: 3 under 10m, 5 at 25m, 10 at 1h"><Toggle checked={settings.sounds} onChange={() => onSetting({ sounds: !settings.sounds })} icon={settings.sounds ? <Volume2 size={16}/> : <VolumeX size={16}/>} /></Setting><Setting label="Chaos Mode" hint="Reversible visual interruptions"><Toggle checked={settings.chaos} onChange={() => onSetting({ chaos: !settings.chaos })} /></Setting><Setting label="Optional webcam monitoring" hint="Permission is requested only when you press enable. No frames are saved or uploaded."><button onClick={onCamera} className={`px-3 py-2 text-sm ${cameraState === 'on' ? 'bg-lime text-ink' : 'border border-white/20'}`}><Camera size={15} className="inline mr-2"/>{cameraState === 'loading' ? 'Requesting…' : cameraState === 'on' ? 'Stop camera' : 'Enable camera'}</button>{cameraState === 'error' && <div className="text-coral text-xs mt-2">Camera unavailable or permission denied. Focus still works normally.</div>}</Setting></div><div className="mt-8 border-l-2 border-lime pl-4 text-sm text-muted">Privacy baseline: tasks, preferences, sessions, and achievements never leave this browser. Camera monitoring is opt-in and stops when disabled.</div></section>;
 }
 function Setting({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) { return <div className="p-5 flex flex-wrap justify-between items-center gap-4"><div><div className="font-medium">{label}</div><div className="text-xs text-muted mt-1">{hint}</div></div><div>{children}</div></div> }
 function Toggle({ checked, onChange, icon }: { checked: boolean; onChange: () => void; icon?: React.ReactNode }) { return <button aria-pressed={checked} onClick={onChange} className={`px-3 py-2 text-sm ${checked ? 'bg-lime text-ink' : 'border border-white/20 text-muted'}`}>{icon}{checked ? ' On' : ' Off'}</button> }
