@@ -9,7 +9,8 @@ Procrasti-Mate is a local-first React/TypeScript focus companion for students an
 - Create, edit, select, complete, and delete tasks with priority and estimates.
 - Focus timer with start, pause, resume, reset, finish, and timestamp-correct background-tab behavior.
 - Ten curated roasts at each Mild, Savage, and Unhinged intensity, with cooldowns and optional SpeechSynthesis.
-- Automatic local focus chimes: 3 for sessions under 10 minutes, 5 for 25-minute sessions, and 10 for hour-long sessions.
+- Automatic local focus chimes: 5 for sessions up to 10 minutes, 5 for 25-minute sessions, and 10 for hour-long sessions.
+- Webcam attention alerts are only active after explicit camera permission: a loud local alarm fires when a face is absent or turned away for 3 seconds, followed by quiet reminders at most twice per minute until attention returns.
 - Visibility events are recorded only during active sessions; a test signal is available in the dashboard.
 - Reversible Chaos Mode, reduced-motion support, keyboard focus indicators, and responsive neo-brutalist UI.
 - Local achievements (First Blood, Locked In, Unbothered, Redemption Arc) and Recharts weekly history based only on actual sessions.

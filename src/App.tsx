@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { awardAchievements } from './lib/achievements';
 import { chooseRoast } from './lib/roasts';
 import { speakRoast } from './lib/speech';
-import { playAttentionAlert, playFocusChime } from './lib/sound';
+import { playAttentionAlert, playFocusChime, playQuietReminder } from './lib/sound';
 import { createVisionDetector, readVisionSignal } from './features/attention/vision';
 import { elapsedSeconds, formatTime } from './lib/timer';
 import { defaults, loadData, saveData } from './lib/storage';
@@ -33,14 +33,16 @@ export default function App() {
   const previewVideo = useRef<HTMLVideoElement | null>(null);
   const detector = useRef<Awaited<ReturnType<typeof createVisionDetector>> | null>(null);
   const missingSince = useRef(0);
-  const lastFaceAlert = useRef(0);
+  const attentionSince = useRef(0);
+  const attentionAlerted = useRef(false);
+  const lastQuietReminder = useRef(0);
   const [cameraState, setCameraState] = useState<'off'|'loading'|'on'|'error'>('off');
   const running = startedAt !== null && pausedAt === null;
   const active = data.tasks.find(t => t.id === activeTask);
   const duration = (active?.estimate || data.settings.duration) * 60;
   const elapsed = startedAt ? Math.min(duration, Math.max(0, elapsedSeconds(startedAt, now) - pausedTotal)) : 0;
   const remaining = Math.max(0, duration - elapsed);
-  const soundCount = duration <= 10 * 60 ? 3 : duration <= 25 * 60 ? 5 : 10;
+  const soundCount = duration <= 10 * 60 ? 5 : duration <= 25 * 60 ? 5 : 10;
 
   useEffect(() => { saveData(data); }, [data]);
   useEffect(() => { if (!running) return; const id = window.setInterval(() => setNow(Date.now()), 250); return () => clearInterval(id); }, [running]);
@@ -55,7 +57,6 @@ export default function App() {
   const event = useCallback((type: EventType) => {
     if (!startedAt || pausedAt !== null) return;
     setDistractions(v => v + 1);
-    if (type === 'face-missing' && data.settings.sounds) playAttentionAlert();
     const message = chooseRoast(data.settings.intensity, type, distractions + 1, lastRoast.current);
     if (!message) return;
     lastRoast.current = Date.now(); setRoast(message);
@@ -75,14 +76,25 @@ export default function App() {
       if (video.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         try {
           const signal = readVisionSignal(detector.current.detectForVideo(video.current, performance.now()) as { faceLandmarks?: Array<Array<{ x: number }>> });
-          if (!signal.facePresent) {
-          if (!missingSince.current) missingSince.current = Date.now();
-          if (running && Date.now() - missingSince.current >= 3000 && Date.now() - lastFaceAlert.current >= 10000) {
-            lastFaceAlert.current = Date.now();
-            event('face-missing');
-          }
+          const lookedAway = signal.facePresent && Math.abs(signal.yaw) >= 35;
+          const attentionLost = !signal.facePresent || lookedAway;
+          if (attentionLost) {
+            if (!attentionSince.current) attentionSince.current = Date.now();
+            const attentionDuration = Date.now() - attentionSince.current;
+            if (running && attentionDuration >= 3000) {
+              if (!attentionAlerted.current) {
+                attentionAlerted.current = true;
+                if (data.settings.sounds) playAttentionAlert();
+                event(signal.facePresent ? 'head-turn' : 'face-missing');
+              } else if (data.settings.sounds && Date.now() - lastQuietReminder.current >= 30000) {
+                lastQuietReminder.current = Date.now();
+                playQuietReminder();
+              }
+            }
           } else {
-            missingSince.current = 0;
+            attentionSince.current = 0;
+            attentionAlerted.current = false;
+            lastQuietReminder.current = 0;
           }
         } catch {
           if (!cancelled) setCameraState('error');

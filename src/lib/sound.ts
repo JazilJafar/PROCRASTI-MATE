@@ -30,17 +30,36 @@ export function playAttentionAlert(): boolean {
   const context = getAudioContext();
   if (!context) return false;
   const now = context.currentTime;
-  [0, 0.18, 0.36].forEach((offset, index) => {
+  [0, 0.18, 0.36, 0.54].forEach((offset, index) => {
     const oscillator = context.createOscillator();
     const gain = context.createGain();
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(index === 2 ? 880 : 660, now + offset);
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(index % 2 ? 740 : 520, now + offset);
     gain.gain.setValueAtTime(0.0001, now + offset);
-    gain.gain.exponentialRampToValueAtTime(0.42, now + offset + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.13);
+    gain.gain.exponentialRampToValueAtTime(0.68, now + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.16);
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now + offset);
-    oscillator.stop(now + offset + 0.15);
+    oscillator.stop(now + offset + 0.18);
+  });
+  return true;
+}
+
+export function playQuietReminder(): boolean {
+  const context = getAudioContext();
+  if (!context) return false;
+  const now = context.currentTime;
+  [0, 0.16].forEach((offset, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(index ? 520 : 440, now + offset);
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + offset + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.12);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + 0.14);
   });
   return true;
 }
