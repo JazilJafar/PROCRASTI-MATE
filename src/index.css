@@ -1,0 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@tailwind base; @tailwind components; @tailwind utilities;
+:root { color: #f5f5f0; background: #0a0a0a; font-family: Inter, sans-serif; font-synthesis: none; }
+* { box-sizing: border-box; } body { margin: 0; min-width: 320px; }
+button, input, textarea, select { font: inherit; } button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid #c6ff4a; outline-offset: 3px; }
+.grid-lines { background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px); background-size: 32px 32px; }
+.chaos { animation: jitter .18s infinite; } @keyframes jitter { 0%,100% { transform: translate(0) } 50% { transform: translate(2px,-1px) } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
