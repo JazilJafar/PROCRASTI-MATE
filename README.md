@@ -28,6 +28,19 @@ npm run build
 npm test
 ```
 
+## Open source
+
+Procrasti-Mate is open source under the [MIT License](./LICENSE).
+
+Contributions are welcome:
+
+1. Fork the repository.
+2. Create a focused feature or fix branch.
+3. Run `npm run build` and `npm test`.
+4. Open a pull request with a short description of the change.
+
+Please keep the project local-first, privacy-preserving, accessible, and usable without a webcam or paid API.
+
 ## Camera and privacy
 
 Camera access is never requested on first run. Enable it explicitly in Settings. The browser may deny access, the device may have no camera, or computer-vision model support may be unavailable; all focus features continue to work without it. Camera tracks are stopped when disabled and raw frames are not persisted or uploaded. The browser Visibility API can detect tab hiding, but cannot detect phones or arbitrary desktop applications.
